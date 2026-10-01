@@ -40,8 +40,10 @@ export async function guardarVisita(db,persona,cuerpo,lugares,{id=null,origen=nu
     }
   }
   if(!barId || !nuevo&&!await obtenerBar(db,barId))throw new ErrorHttp(404,'Ese bar no existe.');
-  const guard=id?'EXISTS(SELECT 1 FROM degustaciones WHERE id=? AND autor_id=? AND retirada_en IS NULL)':'NOT EXISTS(SELECT 1 FROM degustaciones WHERE autor_id=? AND op_id=?)';
+  let guard=id?'EXISTS(SELECT 1 FROM degustaciones WHERE id=? AND autor_id=? AND retirada_en IS NULL)':'NOT EXISTS(SELECT 1 FROM degustaciones WHERE autor_id=? AND op_id=?)';
   const guardParams=id?[id,persona.id]:[persona.id,opId];
+  guard+=" AND EXISTS(SELECT 1 FROM membresias WHERE persona_id=? AND grupo_id=? AND rol IN ('admin','miembro'))";
+  guardParams.push(persona.id,grupoId);
   const commands=[];
   if(nuevo){
     const b=validarDatosBar(nuevo);
@@ -65,7 +67,7 @@ export async function guardarVisita(db,persona,cuerpo,lugares,{id=null,origen=nu
     tipo_cuajado:datos.tipoCuajado,sal:datos.sal,tamano:datos.tamano,formato:datos.formato,precio:datos.precio,
     acompanamientos:JSON.stringify(datos.acompanamientos),comentario:datos.comentario,comentario_privado:datos.comentarioPrivado?1:0,actualizado_en:instante};
   if(id){
-    commands.push(statement(db,`UPDATE degustaciones SET ${Object.keys(campos).map(k=>`${k}=?`).join(',')} WHERE id=? AND autor_id=? AND retirada_en IS NULL`,[...Object.values(campos),id,persona.id]));
+    commands.push(statement(db,`UPDATE degustaciones SET ${Object.keys(campos).map(k=>`${k}=?`).join(',')} WHERE id=? AND autor_id=? AND retirada_en IS NULL AND ${guard}`,[...Object.values(campos),id,persona.id,...guardParams]));
   }else{
     id=crypto.randomUUID();
     const camposInsert={id,op_id:opId,autor_id:persona.id,...campos,origen,creado_en:instante};
@@ -75,6 +77,7 @@ export async function guardarVisita(db,persona,cuerpo,lugares,{id=null,origen=nu
   }
   await db.batch(commands);
   const guardada=await first(db,'SELECT id FROM degustaciones WHERE autor_id=? AND op_id=?',[persona.id,opId]);
+  if(!guardada || !(await gruposDe(db,persona.id)).some(g=>g.id===grupoId))throw new ErrorHttp(403,'Ya no perteneces a ese grupo.');
   return {degustacion:await visita(db,persona,guardada.id,true),repetida:!actual&&guardada.id!==id};
 }
 export async function retirar(db,persona,id){

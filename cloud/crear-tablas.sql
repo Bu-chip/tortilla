@@ -128,4 +128,11 @@ CREATE TABLE limites (
 
 INSERT INTO d1_migrations (name) VALUES ('0002_acceso.sql');
 
+CREATE TABLE bajas_cuenta (
+  uid_hash TEXT PRIMARY KEY,
+  creado_en TEXT NOT NULL
+);
+
+INSERT INTO d1_migrations (name) VALUES ('0003_gestion.sql');
+
 SELECT 'Tablas preparadas' AS resultado, COUNT(*) AS migraciones_aplicadas FROM d1_migrations;

@@ -15,7 +15,7 @@ before(async()=>{
   persistencia=await fs.mkdtemp(path.join(os.tmpdir(),'tortilla-d1-prueba-'));
   mf=new Miniflare(opciones());
   db=await mf.getD1Database('DB');env.DB=db;
-  for(const file of ['0001_piloto.sql','0002_acceso.sql']){
+  for(const file of ['0001_piloto.sql','0002_acceso.sql','0003_gestion.sql']){
     const sql=await fs.readFile(new URL(`../migraciones/${file}`,import.meta.url),'utf8');
     for(const statement of sql.replace(/^--.*$/gm,'').split(';').map(x=>x.trim()).filter(Boolean))await db.prepare(statement).run();
   }
@@ -142,4 +142,59 @@ test('Parar y reiniciar el emulador conserva cuentas, notas y anulación de invi
   const r=await pedir('A','/api/yo');assert.equal(r.status,200);assert.deepEqual(r.body,previo);
   assert.ok((await db.prepare('SELECT revocada_en FROM invitaciones WHERE id=?').bind(invId).first()).revocada_en);
   assert.equal((await pedir('B',`/api/degustaciones/${visitaId}`)).body.degustacion.comentario,null);
+});
+
+test('La ficha informa del permiso de corrección y solo el creador puede guardar',async()=>{
+  assert.equal((await pedir('A',`/api/bares/${barId}`)).body.puedeEditarBar,true);
+  assert.equal((await pedir('B',`/api/bares/${barId}`)).body.puedeEditarBar,false);
+  assert.equal((await pedir('B',`/api/bares/${barId}`,'PATCH',{nombre:'Suplantado'})).status,403);
+});
+test('Cambiar el nombre conserva identidad y autoría; los miembros no pueden gestionar a otros',async()=>{
+  assert.equal((await pedir('B','/api/cuenta','PATCH',{nombre:'Nuevo nombre'})).body.persona.nombre,'Nuevo nombre');
+  assert.equal((await pedir('B','/api/cuenta','PATCH',{nombre:'x'})).status,400);
+  assert.equal((await pedir('B','/api/grupos/piloto/miembros')).body.miembros.length,2);
+  assert.equal((await pedir('C','/api/grupos/piloto/miembros')).status,403);
+  assert.equal((await pedir('B','/api/grupos/piloto/miembros/cuenta-a','PATCH',{rol:'bloqueado'})).status,403);
+});
+test('Retirar acceso impide leer, escribir o reutilizar la invitación; se puede readmitir',async()=>{
+  const invitacion=(await pedir('A','/api/grupos/piloto/invitaciones','POST',{})).body.codigo;
+  assert.equal((await pedir('A','/api/grupos/piloto/miembros/cuenta-b','PATCH',{rol:'bloqueado'})).status,200);
+  for(const ruta of ['/api/yo','/api/bares','/api/degustaciones','/api/batalla'])assert.equal((await pedir('B',ruta)).status,403);
+  assert.equal((await pedir('B','/api/acceso/perfil','POST',{nombre:'Reentrada',codigo:invitacion})).status,403);
+  assert.equal((await pedir('B','/api/cuenta')).body.grupos.length,0);
+  assert.ok((await pedir('B','/api/exportar')).body.degustaciones.every(d=>d.autor_id==='cuenta-b'));
+  assert.equal((await pedir('A','/api/grupos/piloto/miembros/cuenta-b','PATCH',{rol:'miembro'})).status,200);
+  assert.equal((await pedir('B','/api/yo')).status,200);
+});
+test('Dos administradores que intentan dejar su rol a la vez no dejan el grupo sin administrador',async()=>{
+  assert.equal((await pedir('A','/api/grupos/piloto/miembros/cuenta-a','PATCH',{rol:'salio'})).status,409);
+  assert.equal((await pedir('A','/api/grupos/piloto/miembros/cuenta-b','PATCH',{rol:'admin'})).status,200);
+  const resultados=await Promise.all(['A','B'].map(t=>pedir(t,`/api/grupos/piloto/miembros/${identidades[t].id}`,'PATCH',{rol:'miembro'})));
+  assert.deepEqual(resultados.map(r=>r.status).sort(),[200,409]);
+  assert.equal((await db.prepare("SELECT COUNT(*) AS n FROM membresias WHERE grupo_id='piloto' AND rol='admin'").first()).n,1);
+  const admin=(await db.prepare("SELECT persona_id FROM membresias WHERE grupo_id='piloto' AND rol='admin'").first()).persona_id==='cuenta-a'?'A':'B';
+  await pedir(admin,'/api/grupos/piloto/miembros/cuenta-a','PATCH',{rol:'admin'});
+  await pedir('A','/api/grupos/piloto/miembros/cuenta-b','PATCH',{rol:'miembro'});
+});
+test('Salir conserva las visitas y permite volver con una invitación válida',async()=>{
+  const invitacion=(await pedir('A','/api/grupos/piloto/invitaciones','POST',{})).body.codigo;
+  const n=(await pedir('B','/api/exportar')).body.degustaciones.length;
+  assert.equal((await pedir('B','/api/grupos/piloto/miembros/cuenta-b','PATCH',{rol:'salio'})).status,200);
+  assert.equal((await pedir('B','/api/exportar')).body.degustaciones.length,n);
+  assert.equal((await pedir('B','/api/acceso/perfil','POST',{nombre:'De vuelta',codigo:invitacion})).status,201);
+});
+test('Eliminar exige confirmación reciente, protege al último administrador y borra solo los datos propios',async()=>{
+  const body={confirmacion:'ELIMINAR'};
+  assert.equal((await pedir('B','/api/cuenta/eliminar','POST',body)).status,401);
+  identidades.A.authTime=identidades.B.authTime=Math.floor(Date.now()/1000);
+  assert.equal((await pedir('A','/api/cuenta/eliminar','POST',body)).status,409);
+  assert.equal((await pedir('B','/api/cuenta/eliminar','POST',{confirmacion:'no'})).status,400);
+  const previas=(await pedir('A','/api/exportar')).body.degustaciones.length;
+  assert.equal((await pedir('B','/api/cuenta/eliminar','POST',body)).body.datosEliminados,true);
+  assert.equal((await db.prepare("SELECT COUNT(*) AS n FROM personas WHERE id='cuenta-b'").first()).n,0);
+  assert.equal((await db.prepare("SELECT COUNT(*) AS n FROM degustaciones WHERE autor_id='cuenta-b'").first()).n,0);
+  assert.equal((await pedir('B','/api/cuenta')).body.bajaPendiente,true);
+  assert.equal((await pedir('B','/api/acceso/perfil','POST',{nombre:'Reactivar',codigo})).body.bajaPendiente,true);
+  assert.equal((await pedir('A','/api/exportar')).body.degustaciones.length,previas);
+  assert.equal((await pedir('B','/api/cuenta/eliminar','POST',body)).status,200);
 });

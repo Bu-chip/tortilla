@@ -20,7 +20,7 @@ export const AGREGADOS = `
 export function condicionesVisibles({ barId = null, variedadId = null, desde = null, hasta = null, cebolla = null, vegana = false, metodo = 'general' } = {}) {
   const partes = [
     'd.retirada_en IS NULL',
-    'd.grupo_id IN (SELECT m.grupo_id FROM membresias m WHERE m.persona_id = @persona)',
+    "d.grupo_id IN (SELECT m.grupo_id FROM membresias m WHERE m.persona_id = @persona AND m.rol IN ('admin','miembro'))",
   ];
   const params = {};
   partes.push(metodo === 'historica' ? 'd.version_nota = 1' : 'd.version_nota = 2');

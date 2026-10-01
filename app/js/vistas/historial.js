@@ -1,15 +1,15 @@
 import { el, debounce } from '../dom.js';
 import { api, mensajeDeError } from '../api.js';
-import { navegar, ruta as construirRuta } from '../router.js';
+import { recordarRuta, navegar, ruta as construirRuta } from '../router.js';
 import { segmentado } from '../componentes/chips.js';
 import { encabezado, tarjetaVisita, estadoVacio, aviso, cargando, confirmar, toast, formatearFecha } from '../ui.js';
 import { plural } from '../formato.js';
 
-export async function render(cont, params) {
+export async function render(cont, params, { signal } = {}) {
   const filtros = { solo: params.get('solo') === 'todas' ? 'todas' : 'mias', q: params.get('q') || '' };
   const pestanas = segmentado({ nombre: 'Qué visitas ver', valor: filtros.solo, opciones: [{ valor: 'mias', etiqueta: 'Mis visitas' }, { valor: 'todas', etiqueta: 'Todo el grupo' }], alCambiar: (v) => { filtros.solo = v; refrescar(); } });
   const entrada = el('input', { type: 'search', id: 'historial-q', class: 'entrada', placeholder: 'Bar, zona o persona', value: filtros.q, autocomplete: 'off' });
-  entrada.addEventListener('input', debounce(() => { filtros.q = entrada.value; refrescar(); }, 250));
+  entrada.addEventListener('input', debounce(() => { filtros.q = entrada.value; refrescar(); }, 250, signal));
   const resumen = el('p', { class: 'pista', 'aria-live': 'polite' });
   let limite = 40;
   let revision = 0;
@@ -24,16 +24,17 @@ export async function render(cont, params) {
     el('div', { class: 'seccion' }, resumen, el('div', { style: { marginTop: '.6rem' } }, lista, mas)));
 
   async function refrescar(ampliar = false) {
+    if (signal?.aborted) return;
     const turno = ++revision;
     const offset = ampliar ? lista.querySelectorAll('article.visita').length : 0;
     mas.disabled = true;
-    history.replaceState(null, '', construirRuta('/historial', { solo: filtros.solo === 'mias' ? '' : filtros.solo, q: filtros.q }));
+    recordarRuta('/historial', { solo: filtros.solo === 'mias' ? '' : filtros.solo, q: filtros.q });
     if (!ampliar) lista.replaceChildren(cargando());
     try {
       const r = await api.get(`/api/degustaciones?solo=${filtros.solo}&q=${encodeURIComponent(filtros.q)}&limite=${limite}&offset=${offset}`);
-      if (turno !== revision) return;
+      if (signal?.aborted || turno !== revision) return;
       mas.hidden = r.degustaciones.length < limite;
-      resumen.textContent = filtros.solo === 'mias'
+      resumen.textContent = filtros.q ? `${offset + r.degustaciones.length} resultados de la búsqueda${r.degustaciones.length === limite ? ' · Hay más' : ''}` : filtros.solo === 'mias'
         ? `${r.resumen.visitas} ${plural(r.resumen.visitas, 'visita tuya', 'visitas tuyas')} en ${r.resumen.bares} ${plural(r.resumen.bares, 'bar', 'bares')} · Ámbito: ${r.ambito.etiqueta}`
         : `${offset + r.degustaciones.length} ${plural(r.degustaciones.length, 'visita', 'visitas')} visibles · Ámbito: ${r.ambito.etiqueta}`;
       if (!ampliar) lista.replaceChildren();
@@ -56,7 +57,7 @@ export async function render(cont, params) {
         },
       })));
     } catch (error) {
-      if (turno !== revision) return;
+      if (signal?.aborted || turno !== revision) return;
       lista.replaceChildren(aviso('error', mensajeDeError(error), { acciones: el('button', { type: 'button', class: 'boton boton--pequeno', onclick: refrescar }, 'Reintentar') }));
     } finally { if (turno === revision) mas.disabled = false; }
   }

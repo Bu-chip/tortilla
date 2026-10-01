@@ -12,14 +12,14 @@ export const SELECT_VISITA = `SELECT d.*, p.nombre AS autor_nombre,
  v.ingredientes AS variedad_ingredientes, g.nombre AS grupo_nombre
  FROM degustaciones d JOIN personas p ON p.id=d.autor_id JOIN bares b ON b.id=d.bar_id
  LEFT JOIN variedades v ON v.id=d.variedad_id JOIN grupos g ON g.id=d.grupo_id`;
-const VISIBLE = 'd.grupo_id IN (SELECT grupo_id FROM membresias WHERE persona_id=@persona)';
+const VISIBLE = "d.grupo_id IN (SELECT grupo_id FROM membresias WHERE persona_id=@persona AND rol IN ('admin','miembro'))";
 
 export async function gruposDe(db, id) {
   return (await all(db, `SELECT g.id,g.nombre,m.rol FROM grupos g JOIN membresias m ON m.grupo_id=g.id
-    WHERE m.persona_id=? AND g.es_demo=0 ORDER BY m.creado_en,g.nombre`, [id])).map(g => ({ ...g, esDemo: false }));
+    WHERE m.persona_id=? AND m.rol IN ('admin','miembro') AND g.es_demo=0 ORDER BY m.creado_en,g.nombre`, [id])).map(g => ({ ...g, esDemo: false }));
 }
 export const ambitoDe = grupos => ({ grupos, etiqueta: grupos.map(g=>g.nombre).join(' + ') || 'Sin grupo', demo: false });
-export const resumen = (db,id) => first(db, 'SELECT COUNT(*) AS visitas,COUNT(DISTINCT bar_id) AS bares FROM degustaciones WHERE autor_id=? AND retirada_en IS NULL', [id]);
+export const resumen = (db,id) => first(db, 'SELECT COUNT(*) AS visitas,COUNT(DISTINCT bar_id) AS bares,SUM(CASE WHEN version_nota=1 THEN 1 ELSE 0 END) AS historicas FROM degustaciones WHERE autor_id=? AND retirada_en IS NULL', [id]);
 export async function yo(db, persona) {
   const grupos = await gruposDe(db, persona.id);
   const preferencia = await first(db, 'SELECT lado FROM preferencias_cebolla WHERE persona_id=?', [persona.id]);
@@ -82,14 +82,14 @@ export async function ficha(db,persona,id,f) {
   const filtros={metodo:f.metodo,barId:id,variedadId,desde:f.desde,hasta:f.hasta};
   const activo=!!(variedadId||f.desde||f.hasta), m=await medias(db,persona.id,filtros);
   const porVariedad=await mediasAgrupadas(db,persona.id,{...filtros,variedadId:null},'variedad_id');
-  return {bar,metodo:f.metodo,filtro:{variedadId,desde:f.desde,hasta:f.hasta,activo},medias:m,
+  return {bar,puedeEditarBar:(await first(db,'SELECT creado_por FROM bares WHERE id=?',[id]))?.creado_por===persona.id,metodo:f.metodo,filtro:{variedadId,desde:f.desde,hasta:f.hasta,activo},medias:m,
     mediasGenerales:activo?await medias(db,persona.id,{metodo:f.metodo,barId:id}):m,
     mediasHistoricas:await medias(db,persona.id,{...filtros,metodo:'historica'}),
     variedades:(await variedades(db,id)).map(v=>({...v,medias:porVariedad.get(v.id)||formatearMedias(null)})),
     visitas:await visitas(db,persona,{...filtros,limite:500})};
 }
 export async function batalla(db,id) {
-  const alcance='SELECT m2.persona_id FROM membresias m2 WHERE m2.grupo_id IN (SELECT grupo_id FROM membresias WHERE persona_id=@persona)';
+  const alcance="SELECT m2.persona_id FROM membresias m2 WHERE m2.rol IN ('admin','miembro') AND m2.grupo_id IN (SELECT grupo_id FROM membresias WHERE persona_id=@persona AND rol IN ('admin','miembro'))";
   const mia=await first(db,'SELECT lado,actualizado_en FROM preferencias_cebolla WHERE persona_id=?',[id]);
   const rows=await all(db,`SELECT lado,COUNT(*) AS n FROM preferencias_cebolla WHERE persona_id IN (${alcance}) GROUP BY lado`,{persona:id});
   const votos={con:0,sin:0,total:0,miembros:(await first(db,`SELECT COUNT(DISTINCT persona_id) AS n FROM membresias WHERE persona_id IN (${alcance})`,{persona:id})).n};

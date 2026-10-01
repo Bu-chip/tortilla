@@ -48,7 +48,7 @@ test('El archivo del panel pasa tipos y busca/guarda un bar con Unicode en Worke
       },
     }), resourcePersistencePath: path.join(temporal, 'datos') });
     const db = await mf.getD1Database('DB');
-    for (const nombre of ['0001_piloto.sql','0002_acceso.sql']) {
+    for (const nombre of ['0001_piloto.sql','0002_acceso.sql','0003_gestion.sql']) {
       const sql = await readFile(new URL(`../migraciones/${nombre}`,import.meta.url),'utf8');
       for (const sentencia of sql.replace(/^--.*$/gm,'').split(';').map(s=>s.trim()).filter(Boolean)) await db.prepare(sentencia).run();
     }

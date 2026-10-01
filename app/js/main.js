@@ -1,7 +1,7 @@
 import { el, vaciar, reemplazar } from './dom.js';
 import { api, mensajeDeError } from './api.js';
 import { estado, establecerConfig, establecerSesion, limpiarSesion, movimientoReducido, fijarMovimientoReducido, suscribir } from './estado.js';
-import { iniciarRouter, navegar } from './router.js';
+import { iniciarRouter, navegar, rutaRecordada } from './router.js';
 import { tortilla } from './tortilla.js';
 import { toast, cargando, estadoVacio, aviso } from './ui.js';
 import * as inicio from './vistas/inicio.js';
@@ -43,12 +43,9 @@ const NAV_ESCRITORIO = [
 
 const MENU = [
   { ruta: '/cuenta', texto: 'Mi cuenta y grupo', icono: '👤', fondo: '#FFF0C0' },
-  { ruta: '/valorar', texto: 'Puntuar tortilla', icono: '⭐', fondo: '#FFF0C0' },
-  { ruta: '/bares', texto: 'Bares y ranking', icono: '🏆', fondo: '#FFE0D0', badge: 'TOP' },
   { ruta: '/mapa', texto: 'Mapa de bares', icono: '🗺️', fondo: '#D0E8F8' },
   { ruta: '/batalla', texto: 'Con vs sin cebolla', icono: '🧅', fondo: '#E8E0F8' },
   { ruta: '/vegana', texto: 'Sección vegana', icono: '🌿', fondo: '#E0F0E0' },
-  { ruta: '/historial', texto: 'Historial', icono: '📒', fondo: '#FFD8E8' },
   { ruta: '/acerca', texto: 'Acerca de', icono: 'ℹ️', fondo: '#EEEEEE' },
   { ruta: '/importar', texto: 'Importar del Tortillómetro', icono: '📥', fondo: '#FFF0C0', separador: true },
   { accion: 'exportar', texto: 'Exportar mis datos', icono: '📤', fondo: '#E0F0E0' },
@@ -98,7 +95,7 @@ cajon.addEventListener('keydown', (e) => {
   if (e.shiftKey && document.activeElement === primero) { e.preventDefault(); ultimo.focus(); }
   else if (!e.shiftKey && document.activeElement === ultimo) { e.preventDefault(); primero.focus(); }
 });
-document.getElementById('persona-chip').addEventListener('click', abrirCajon);
+document.getElementById('persona-chip').addEventListener('click', () => navegar('/cuenta'));
 
 async function salir() {
   cerrarCajon();
@@ -115,14 +112,15 @@ async function salir() {
 function construirNavegacion() {
   const conSesion = !!estado.sesion;
   const nav = document.getElementById('nav-escritorio');
-  reemplazar(nav, conSesion ? NAV_ESCRITORIO.map((i) => el('a', { href: `#${i.ruta}`, 'aria-current': i.ruta === rutaActual ? 'page' : null }, i.texto)) : []);
+  reemplazar(nav, conSesion ? NAV_ESCRITORIO.map((i) => el('a', { href: rutaRecordada(i.ruta), 'aria-current': i.ruta === rutaActual ? 'page' : null }, i.texto)) : []);
   document.querySelector('.cabecera__puntuar').hidden = !conSesion;
 
   const chip = document.getElementById('persona-chip');
   if (conSesion) {
     chip.hidden = false;
     chip.textContent = estado.sesion.persona.nombre;
-    chip.title = `Sesión de ${estado.sesion.persona.nombre}. Abre el menú.`;
+    chip.title = 'Mi cuenta y grupo';
+    chip.setAttribute('aria-label', `Mi cuenta: ${estado.sesion.persona.nombre}`);
   } else {
     chip.hidden = true;
   }
@@ -132,9 +130,9 @@ function construirNavegacion() {
   barra.hidden = !conSesion;
   barra.replaceChildren(
     el('a', { href: '#/', 'aria-current': rutaActual === '/' ? 'page' : null }, el('span', { class: 'ico', 'aria-hidden': 'true' }, '🏠'), 'Inicio'),
-    el('a', { href: '#/bares', 'aria-current': rutaActual === '/bares' ? 'page' : null }, el('span', { class: 'ico', 'aria-hidden': 'true' }, '🏆'), 'Bares'),
+    el('a', { href: rutaRecordada('/bares'), 'aria-current': rutaActual === '/bares' ? 'page' : null }, el('span', { class: 'ico', 'aria-hidden': 'true' }, '🏆'), 'Bares'),
     el('a', { href: '#/valorar', class: 'tab-puntuar', 'aria-current': rutaActual === '/valorar' ? 'page' : null, 'aria-label': 'Puntuar una tortilla' }, el('span', { class: 'tortilla-boton' }, tortilla({ animo: 'feliz', tamano: 40 })), 'Puntuar'),
-    el('a', { href: '#/historial', 'aria-current': rutaActual === '/historial' ? 'page' : null }, el('span', { class: 'ico', 'aria-hidden': 'true' }, '📒'), 'Historial'),
+    el('a', { href: rutaRecordada('/historial'), 'aria-current': rutaActual === '/historial' ? 'page' : null }, el('span', { class: 'ico', 'aria-hidden': 'true' }, '📒'), 'Historial'),
     el('a', { href: '#', onclick: (e) => { e.preventDefault(); abrirCajon(); } }, el('span', { class: 'ico', 'aria-hidden': 'true' }, '☰'), 'Más'));
 
   const listaCajon = document.getElementById('cajon-lista');
@@ -149,7 +147,7 @@ function construirNavegacion() {
         const a=el('a',{href:url,download:`tortillas-${new Date().toISOString().slice(0,10)}.json`});document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
       }catch(error){toast(mensajeDeError(error));}
     } }, contenido);
-    return el('a', { class: `menu-item ${i.separador ? 'menu-item--separador' : ''}`, href: `#${i.ruta}`, 'aria-current': i.ruta === rutaActual ? 'page' : null, onclick: cerrarCajon }, contenido);
+    return el('a', { class: `menu-item ${i.separador ? 'menu-item--separador' : ''}`, href: rutaRecordada(i.ruta), 'aria-current': i.ruta === rutaActual ? 'page' : null, onclick: cerrarCajon }, contenido);
   }));
   const personaCajon = document.getElementById('cajon-persona');
   if (conSesion) {
@@ -177,24 +175,30 @@ async function manejarRuta({ ruta, params }) {
     return;
   }
   if (r.soloSinSesion && estado.sesion) { navegar('/', { reemplazar: true }); return; }
+  if (estado.config.auth === 'firebase' && estado.sesion && !estado.sesion.grupos.length && !['/cuenta','/acerca'].includes(ruta)) {
+    navegar('/cuenta', { reemplazar: true }); return;
+  }
   rutaActual = r.nav === '/bares' && r.params ? '/bares' : ruta;
   construirNavegacion();
   document.title = `${r.titulo} · ${estado.config.nombreApp}`;
   main.append(cargando());
   const contenedor = el('div', {});
+  const ciclo = new AbortController();
+  limpiezaVista = () => ciclo.abort();
   try {
     const extra = Object.fromEntries((r.params || []).map((k, i) => [k, decodeURIComponent(m[i + 1])]));
-    const resultado = await r.vista.render(contenedor, params, extra);
-    if (id !== contadorRender) return;
+    const resultado = await r.vista.render(contenedor, params, { ...extra, signal: ciclo.signal });
+    if (id !== contadorRender) { resultado?.limpiar?.(); return; }
     vaciar(main);
     if (contenedor.classList.contains('contenido--ancho')) main.classList.add('contenido--ancho');
     contenedor.classList.add('vista');
     if (estado.sesion?.ambito?.demo) contenedor.prepend(el('p', { class: 'demo-contexto' }, 'DEMO · Visitas y recetas ficticias, en bares reales.'));
     main.append(contenedor);
     if (resultado && typeof resultado === 'object') {
-      if (typeof resultado.limpiar === 'function') limpiezaVista = resultado.limpiar;
+      limpiezaVista = () => { ciclo.abort(); resultado.limpiar?.(); };
       if (typeof resultado.alMontar === 'function') await resultado.alMontar();
     }
+    if (id !== contadorRender) return;
     if (!primeraCarga) { window.scrollTo({ top: 0 }); main.focus({ preventScroll: true }); }
     primeraCarga = false;
   } catch (error) {

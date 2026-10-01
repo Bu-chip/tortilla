@@ -38,7 +38,12 @@ export async function render(cont) {
     el('p', {}, 'Una variedad es una receta del bar: con o sin cebolla, vegana o no, y sus ingredientes añadidos. Vegana es una característica de la receta que puede convivir con pimiento, setas o lo que sea. La batalla «con o sin cebolla» recoge una preferencia por persona, que se puede cambiar; puntuar tortillas no vota.'),
 
     el('h2', {}, 'Quién ve qué'),
-    el('p', {}, `Cada persona pertenece a un grupo (ámbito). Ves las visitas y las medias de tu grupo; una persona sin grupo no ve nada. Tu ámbito actual: ${sesion?.ambito?.etiqueta || 'sin sesión'}.`),
+    el('p', {}, `Las visitas y las medias se comparten dentro de tu grupo. Los comentarios que marcas como privados solo los ves tú. Tu grupo actual: ${sesion?.ambito?.etiqueta || 'sin sesión'}.`),
+    el('p', {}, 'El catálogo de bares y recetas es compartido entre los grupos de esta aplicación. Añadir un local no hace públicas tus opiniones. Quien administra tu grupo puede gestionar sus miembros e invitaciones.'),
+    el('h2', {}, 'Tus datos y tu cuenta'),
+    el('p', {}, config.auth==='firebase' ? 'Firebase gestiona el acceso con correo o Google; las valoraciones se guardan en Cloudflare. Esta web no guarda tu contraseña en su base de valoraciones. El borrador permanece en el navegador de este dispositivo hasta guardarlo o descartarlo.' : 'Esta versión local guarda los datos en su propia base. Los datos de demostración son independientes.'),
+    el('p', {}, 'En Mi cuenta y grupo puedes descargar tus valoraciones. Al salir de un grupo, las visitas anteriores se conservan. Al eliminar tu cuenta, se borran tus valoraciones y preferencias; los lugares y recetas compartidos se conservan sin tu autoría. Las copias de recuperación pueden conservar temporalmente datos anteriores a la eliminación.'),
+    el('p', {}, 'Si necesitas ayuda con una invitación o con tus datos, contacta con la persona que te invitó. La exportación personal no es una copia completa del grupo ni se restaura desde el importador del Tortillómetro.'),
     sesion?.ambito?.demo ? el('p', {}, el('strong', {}, 'Datos de demostración: '), 'los bares son reales; las visitas, recetas, precios y opiniones son ficticios y no confirman la oferta de los establecimientos.') : null,
     el('p', {}, 'Puedes exportar tus datos desde el menú (JSON con identificadores, autoría, criterios, fechas y valores ausentes) e importar valoraciones del Tortillómetro antiguo revisándolas una a una.'),
 

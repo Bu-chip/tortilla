@@ -1,4 +1,9 @@
-let auth, sdk;
+let auth, sdk, claveRecuerdo;
+export function recordarAcceso(){try{return localStorage.getItem(claveRecuerdo)==='1';}catch{return false;}}
+export async function fijarRecuerdo(activo){
+  await sdk.setPersistence(auth,activo?sdk.browserLocalPersistence:sdk.browserSessionPersistence);
+  try{localStorage.setItem(claveRecuerdo,activo?'1':'0');}catch{ /* La sesión actual conserva la elección del SDK. */ }
+}
 export async function iniciarFirebase(config) {
   if(config.auth!=='firebase')return;
   const [app,modulo]=await Promise.all([
@@ -8,8 +13,8 @@ export async function iniciarFirebase(config) {
   sdk=modulo;
   auth=sdk.getAuth(app.initializeApp(config.firebase));
   auth.languageCode='es';
-  // La sesión se conserva al recargar esta pestaña; otras pestañas tienen su propia sesión.
-  await sdk.setPersistence(auth,sdk.browserSessionPersistence);
+  claveRecuerdo=`tortillas:recordar:${config.firebase.projectId}`;
+  await sdk.setPersistence(auth,recordarAcceso()?sdk.browserLocalPersistence:sdk.browserSessionPersistence);
   await auth.authStateReady();
 }
 export const usuarioFirebase=()=>auth?.currentUser||null;
@@ -31,6 +36,12 @@ export const enviarVerificacion=()=>sdk.sendEmailVerification(auth.currentUser);
 export async function refrescarFirebase(){await sdk.reload(auth.currentUser);return tokenFirebase(true);}
 export const salirFirebase=()=>auth ? sdk.signOut(auth) : Promise.resolve();
 export const recuperarFirebase=email=>sdk.sendPasswordResetEmail(auth,email);
+export async function confirmarIdentidad(clave){
+  if(tieneClaveFirebase())await sdk.reauthenticateWithCredential(auth.currentUser,sdk.EmailAuthProvider.credential(auth.currentUser.email,clave));
+  else await sdk.reauthenticateWithPopup(auth.currentUser,new sdk.GoogleAuthProvider());
+  await tokenFirebase(true);
+}
+export const eliminarAccesoFirebase=()=>sdk.deleteUser(auth.currentUser);
 export async function cambiarClaveFirebase(actual,nueva){
   if(!tieneClaveFirebase())throw new Error('Esta cuenta utiliza Google. Gestiona su contraseña desde tu cuenta de Google.');
   await sdk.reauthenticateWithCredential(auth.currentUser,sdk.EmailAuthProvider.credential(auth.currentUser.email,actual));
@@ -48,7 +59,7 @@ export function errorFirebase(error){
     'auth/password-does-not-meet-requirements':'La contraseña no cumple los requisitos del acceso.',
     'auth/too-many-requests':'Demasiados intentos. Espera un momento antes de volver a intentarlo.',
     'auth/network-request-failed':'No hay conexión con el servicio de cuentas. Vuelve a intentarlo.',
-    'auth/requires-recent-login':'Vuelve a entrar antes de cambiar la contraseña.',
+    'auth/requires-recent-login':'Vuelve a entrar para confirmar esta operación.',
     'auth/user-disabled':'Esta cuenta está desactivada.',
     'auth/operation-not-allowed':'El acceso aún no está habilitado. Falta terminar la configuración.',
     'auth/popup-closed-by-user':'Se ha cerrado la ventana de Google. Puedes volver a intentarlo.',

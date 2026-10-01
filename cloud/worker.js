@@ -5,6 +5,7 @@ import { formatearMedias, compararPorPerspectiva } from '../server/servicios/med
 import { normalizar } from '../server/servicios/texto.js';
 import { verificarFirebase, comprobarCuenta } from './firebase.js';
 import { first, all, run, sha256 } from './db.js';
+import * as cuentas from './cuentas.js';
 import * as acceso from './acceso.js';
 import * as leer from './lecturas.js';
 import * as escribir from './escrituras.js';
@@ -27,7 +28,7 @@ async function cuerpoDe(request){
   catch{throw new ErrorHttp(400,'Los datos enviados no son válidos.');}
 }
 function configuracion(env){
-  return {nombreApp:env.APP_NAME||'Tortillas',demo:false,registro:'invitacion',auth:'firebase',
+  return {funciones:{gestionCuenta:1},nombreApp:env.APP_NAME||'Tortillas',demo:false,registro:'invitacion',auth:'firebase',
     firebase:{apiKey:env.FIREBASE_API_KEY,projectId:env.FIREBASE_PROJECT_ID,authDomain:env.FIREBASE_AUTH_DOMAIN},
     lugares:{activa:env.PLACES_PROVIDER!=='ninguno',proveedor:'photon',zona:env.PLACES_AREA||'Bilbao y alrededores'}};
 }
@@ -64,6 +65,10 @@ export function crearWorker({autenticar=null,transporte=fetch}={}) {
           return json(await leer.yo(db,persona),201);
         }
         if(path==='/api/acceso/salir'&&method==='POST')return json({ok:true});
+        if(path==='/api/cuenta/eliminar'&&method==='POST')return json(await cuentas.eliminarDatos(db,identidad,await cuerpoDe(request)));
+        if(path==='/api/cuenta'&&method==='GET')return json(await leer.yo(db,await cuentas.perfil(db,identidad.id)));
+        if(path==='/api/cuenta'&&method==='PATCH')return json(await leer.yo(db,await cuentas.cambiarNombre(db,identidad.id,await cuerpoDe(request))));
+        if(path==='/api/exportar'&&method==='GET'){await cuentas.perfil(db,identidad.id);return json(await leer.exportar(db,identidad.id));}
         const persona=await acceso.personaDe(db,identidad);
         const grupos=await leer.gruposDe(db,persona.id),ambito=leer.ambitoDe(grupos);
         const f=filtros(url.searchParams);
@@ -107,12 +112,17 @@ export function crearWorker({autenticar=null,transporte=fetch}={}) {
             const bar=bares.find(b=>b.id===v.barId);return {...v,bar,nombre:`${bar.nombre} · ${v.nombre}`,variedadNombre:v.nombre,medias:porVariedad.get(v.id)||formatearMedias(null)};
           }).sort(compararPorPerspectiva(f.perspectiva))});
         }
-        if(path==='/api/exportar'&&method==='GET')return json(await leer.exportar(db,persona.id));
         if(path.startsWith('/api/importar')&&method==='POST'){
           const body=await cuerpoDe(request);
           if(body.formato!=='tortillometro_v2')throw new ErrorHttp(400,'Formato de importación no reconocido.');
           if(path==='/api/importar/previsualizar')return json({elementos:await importacion.previsualizar(db,persona,body.entradas,Math.max(0,Math.min(500,Math.floor(Number(body.offset)||0))))});
           if(path==='/api/importar')return json(await importacion.importar(db,persona,body.elementos,buscador));
+        }
+        match=path.match(/^\/api\/grupos\/([^/]+)\/miembros(?:\/([^/]+))?$/);
+        if(match){
+          const grupoId=decodeURIComponent(match[1]);
+          if(method==='GET'&&!match[2])return json({miembros:await cuentas.miembros(db,persona,grupoId)});
+          if(method==='PATCH'&&match[2])return json(await cuentas.cambiarMiembro(db,persona,grupoId,decodeURIComponent(match[2]),(await cuerpoDe(request)).rol));
         }
         match=path.match(/^\/api\/grupos\/([^/]+)\/invitaciones(?:\/([^/]+))?$/);
         if(match){

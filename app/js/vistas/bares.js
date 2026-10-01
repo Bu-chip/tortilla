@@ -1,6 +1,6 @@
 import { el, debounce } from '../dom.js';
 import { api, mensajeDeError } from '../api.js';
-import { ruta as construirRuta } from '../router.js';
+import { recordarRuta, ruta as construirRuta } from '../router.js';
 import { grupoChips, segmentado } from '../componentes/chips.js';
 import { encabezado, mediasCompactas, chipVariedad, estadoVacio, aviso, cargando, formatearNota } from '../ui.js';
 import { TEXTOS } from '../etiquetas.js';
@@ -11,7 +11,7 @@ const PERSPECTIVAS = [
   { valor: 'global', etiqueta: 'Global' },
 ];
 
-export async function render(cont, params) {
+export async function render(cont, params, { signal } = {}) {
   const filtros = {
     metodo: params.get('metodo') === 'historica' ? 'historica' : 'general',
     q: params.get('q') || '',
@@ -33,18 +33,18 @@ export async function render(cont, params) {
   const lista = el('div', { 'aria-live': 'polite', 'aria-busy': 'false' });
   const ambitoNodo = el('div', { style: { marginTop: '.3rem' } });
 
-  entrada.addEventListener('input', debounce(() => { filtros.q = entrada.value; refrescar(); }, 250));
+  entrada.addEventListener('input', debounce(() => { filtros.q = entrada.value; refrescar(); }, 250, signal));
   selectZona.addEventListener('change', () => { filtros.zona = selectZona.value; refrescar(); });
 
   cont.append(
     encabezado('Dónde repetirías', { subtitulo: 'Bares, tortillas y las notas de tu grupo.' }),
     ambitoNodo,
-    el('div', { class: 'tarjeta', style: { marginTop: '.75rem' } },
+    el('div', { class: 'ranking-controles' },
       el('div', { class: 'campo' }, el('label', { for: 'bares-q' }, 'Buscar'), entrada),
-      el('details', { class: 'filtros-ranking', open: !!(filtros.zona || filtros.cebolla || filtros.vegana) }, el('summary', {}, 'Filtrar por zona y receta'),
+      el('details', { class: 'filtros-ranking', open: !!(filtros.zona || filtros.cebolla || filtros.vegana || filtros.metodo === 'historica') }, el('summary', {}, 'Más filtros'),
       el('div', { class: 'campo' }, el('label', { for: 'bares-zona' }, 'Zona'), selectZona),
-      el('div', { class: 'campo' }, el('span', { class: 'campo__etiqueta' }, 'Variante'), el('div', { class: 'chips' }, chipsCebolla.elemento, chipVegana.elemento))),
-      el('div', { class: 'campo', style: { marginBottom: 0 } }, el('span', { class: 'campo__etiqueta' }, 'Ordenar por'), perspectiva.elemento, metodo)),
+      el('div', { class: 'campo' }, el('span', { class: 'campo__etiqueta' }, 'Variante'), el('div', { class: 'chips' }, chipsCebolla.elemento, chipVegana.elemento)), el('div', { class: 'campo' }, el('label', { for: 'ranking-metodo' }, 'Método de valoración'), metodo)),
+      el('div', { class: 'campo ranking-perspectiva', style: { marginBottom: 0 } }, perspectiva.elemento)),
     el('div', { class: 'seccion' }, lista));
 
   try {
@@ -53,8 +53,9 @@ export async function render(cont, params) {
   } catch { /* sin zonas */ }
 
   async function refrescar() {
+    if (signal?.aborted) return;
     const turno = ++revision;
-    history.replaceState(null, '', construirRuta('/bares', { metodo: filtros.metodo, q: filtros.q, zona: filtros.zona, cebolla: filtros.cebolla, vegana: filtros.vegana ? '1' : '', perspectiva: filtros.perspectiva === 'demas' ? '' : filtros.perspectiva }));
+    recordarRuta('/bares', { metodo: filtros.metodo, q: filtros.q, zona: filtros.zona, cebolla: filtros.cebolla, vegana: filtros.vegana ? '1' : '', perspectiva: filtros.perspectiva === 'demas' ? '' : filtros.perspectiva });
     lista.setAttribute('aria-busy', 'true');
     lista.replaceChildren(cargando('Calculando medias…'));
     try {
@@ -65,11 +66,11 @@ export async function render(cont, params) {
       if (filtros.vegana) consulta.set('vegana', '1');
       consulta.set('perspectiva', filtros.perspectiva);
       const r = await api.get(`/api/bares?${consulta}`);
-      if (turno !== revision) return;
-      ambitoNodo.replaceChildren(el('span', { class: 'etiqueta-ambito' }, `Ámbito: ${r.ambito.etiqueta}`, r.ambito.demo ? el('span', { class: 'etiqueta-demo' }, TEXTOS.demo) : null));
+      if (signal?.aborted || turno !== revision) return;
+      ambitoNodo.replaceChildren(el('span', { class: 'etiqueta-ambito' }, `Grupo: ${r.ambito.etiqueta}`, r.ambito.demo ? el('span', { class: 'etiqueta-demo' }, TEXTOS.demo) : null));
       pintarLista(r.bares);
     } catch (error) {
-      if (turno !== revision) return;
+      if (signal?.aborted || turno !== revision) return;
       lista.replaceChildren(aviso('error', mensajeDeError(error, 'No se ha podido cargar el ranking.'), { acciones: el('button', { type: 'button', class: 'boton boton--pequeno', onclick: refrescar }, 'Reintentar') }));
     } finally {
       if (turno === revision) lista.setAttribute('aria-busy', 'false');
@@ -91,7 +92,8 @@ export async function render(cont, params) {
     if (!conDatos.length) {
       lista.append(estadoVacio({
         titulo: filtros.perspectiva === 'tu' ? 'Todavía no has puntuado ningún bar' : filtros.perspectiva === 'demas' ? 'Nadie más ha puntuado todavía' : 'Todavía no hay valoraciones',
-        texto: filtros.perspectiva === 'tu' ? 'Tu ranking personal se construye con tus propias visitas; no inventamos uno.' : 'Cuando haya valoraciones en tu ámbito aparecerán aquí ordenadas.',
+        texto: filtros.perspectiva === 'tu' ? 'Cada visita que guardes contará aquí.' : sinDatos.some(b => b.medias.tu.visitas) ? 'Tus notas están guardadas. Aún faltan las de tus amigos en esta selección.' : 'Cuando tus amigos puntúen, verás aquí sus notas.',
+        accion: filtros.perspectiva === 'demas' && sinDatos.some(b => b.medias.tu.visitas) ? el('a', { class: 'boton boton--pequeno', href: construirRuta('/bares', { ...filtros, perspectiva: 'tu', vegana: filtros.vegana ? '1' : '' }) }, 'Ver mi ranking') : null,
         animo: 'duda',
       }));
     } else {
@@ -99,7 +101,7 @@ export async function render(cont, params) {
     }
     if (sinDatos.length) {
       lista.append(el('details', { class: 'detalles', style: { marginTop: '1rem' } },
-        el('summary', {}, `${sinDatos.length} ${sinDatos.length === 1 ? 'bar sin datos' : 'bares sin datos'} en esta perspectiva`),
+        el('summary', {}, `${sinDatos.length} ${sinDatos.length === 1 ? 'bar pendiente' : 'bares pendientes'} de estas notas`),
         el('ul', { class: 'lista' }, sinDatos.map((b) => tarjetaBar(b, null)))));
     }
   }

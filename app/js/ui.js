@@ -35,7 +35,7 @@ export function aviso(tipo, contenido, { acciones = null } = {}) {
 export function textoAmbito(ambito) {
   if (!ambito) return null;
   return el('span', { class: 'etiqueta-ambito' },
-    `Ámbito: ${ambito.etiqueta}`,
+    `Grupo: ${ambito.etiqueta}`,
     ambito.demo ? el('span', { class: 'etiqueta-demo' }, TEXTOS.demo) : null);
 }
 
@@ -123,8 +123,7 @@ export function tarjetaVisita(d, { mostrarBar = false, alEditar = null, alRetira
           mostrarBar ? [el('a', { href: `#/bar/${encodeURIComponent(d.bar.id)}` }, d.bar.nombre), d.bar.zona ? ` · ${d.bar.zona}` : '', ' · '] : null,
           d.variedad.vegana ? '🌿 ' : '', d.variedad.nombre))),
     d.versionNota === 1 ? el('p', { class: 'pista metodo-historico' }, 'Histórica · media de los cinco criterios originales') : null,
-    criterios,
-    detalles.length ? el('div', { class: 'visita__detalles' }, detalles) : null,
+    (criterios.childElementCount || detalles.length) ? el('details', { class: 'visita-extra' }, el('summary', {}, 'Ver detalles de la visita'), criterios, detalles.length ? el('div', { class: 'visita__detalles' }, detalles) : null) : null,
     d.comentario ? el('p', { class: 'visita__comentario' }, `“${d.comentario}”`, d.comentarioPrivado ? el('span', { class: 'chip chip--privado chip--pequeno', style: { marginLeft: '.4rem' } }, 'solo lo ves tú') : null) : null,
     acciones);
 }

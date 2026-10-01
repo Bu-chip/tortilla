@@ -270,6 +270,7 @@ export function crearApi({ db, config, transporteLugares }) {
     const visitas = degustaciones.listarDegustaciones(db, ctx.persona, { metodo: f.metodo, barId: bar.id, variedadId, desde: f.desde, hasta: f.hasta, limite: 500 });
     return {
       bar,
+      puedeEditarBar: true,
       ambito: ambitoDe(ctx.persona),
       filtro: { variedadId, desde: f.desde, hasta: f.hasta, activo: filtroActivo },
       metodo: f.metodo,

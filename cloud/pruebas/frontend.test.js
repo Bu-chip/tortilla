@@ -40,3 +40,35 @@ test('Los borradores quedan separados por persona y por proyecto, sin perder los
     establecerConfig({auth:'local'});assert.equal(leerBorrador('A').texto,'local anterior');
   }finally{globalThis.localStorage=original;}
 });
+
+test('Una búsqueda pendiente se cancela al desmontar la vista, sin perder las búsquedas posteriores',async()=>{
+  const {debounce}=await import('../../app/js/dom.js');
+  const control=new AbortController();let rutas=[];
+  const buscar=debounce(q=>rutas.push(q),10,control.signal);
+  buscar('Baster');control.abort();
+  buscar('No debe ejecutarse');
+  await new Promise(r=>setTimeout(r,25));assert.deepEqual(rutas,[]);
+  const siguiente=debounce(q=>rutas.push(q),10);
+  siguiente('Egur');siguiente('Baster');
+  await new Promise(r=>setTimeout(r,25));assert.deepEqual(rutas,['Baster']);
+});
+
+test('Una respuesta que se queda pendiente al leer el cuerpo tiene tiempo máximo y admite reintento',async()=>{
+  const {recibir,ErrorRed}=await import('../../app/js/api.js');
+  const original=globalThis.fetch;
+  globalThis.fetch=async(_url,{signal})=>({text:()=>new Promise((_resolve,reject)=>signal.addEventListener('abort',()=>reject(new Error('abort'))))});
+  try{await assert.rejects(recibir('https://example.invalid',{},15),e=>e instanceof ErrorRed&&/tardando/.test(e.message));}
+  finally{globalThis.fetch=original;}
+});
+
+test('Volver a la lista conserva sus filtros y cambiar de cuenta los descarta',async()=>{
+  const {recordarRuta,volverALista,rutaRecordada}=await import('../../app/js/router.js');
+  const original=globalThis.history;globalThis.history={replaceState(){}};
+  try{
+    establecerSesion({persona:{id:'A'}});recordarRuta('/bares',{q:'Baster',perspectiva:'tu'});
+    assert.equal(volverALista().href,'#/bares?q=Baster&perspectiva=tu');
+    recordarRuta('/historial',{q:'pincho',solo:'demas'});
+    assert.equal(volverALista().texto,'Historial');assert.equal(rutaRecordada('/bares'),'#/bares?q=Baster&perspectiva=tu');
+    limpiarSesion();establecerSesion({persona:{id:'B'}});assert.equal(rutaRecordada('/bares'),'#/bares');assert.equal(rutaRecordada('/historial'),'#/historial');
+  }finally{globalThis.history=original;limpiarSesion();}
+});

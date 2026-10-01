@@ -5,6 +5,7 @@ import { navegar } from '../router.js';
 import { tortilla } from '../tortilla.js';
 import { aviso } from '../ui.js';
 import { usuarioFirebase,entrarFirebase,entrarGoogleFirebase,registrarFirebase,enviarVerificacion,refrescarFirebase,salirFirebase,recuperarFirebase,errorFirebase } from '../firebase-cliente.js';
+import { recordarAcceso, fijarRecuerdo, eliminarAccesoFirebase } from '../firebase-cliente.js';
 
 export async function render(cont,params){
   const error=el('div',{'aria-live':'assertive'}), zona=el('div',{});
@@ -27,7 +28,8 @@ export async function render(cont,params){
     try{
       const datos=await api.get('/api/yo');establecerSesion(datos);navegar('/',{reemplazar:true});
     }catch(e){
-      if(e.datos?.necesitaPerfil)perfil();
+      if(e.datos?.bajaPendiente)bajaPendiente();
+      else if(e.datos?.necesitaPerfil)perfil();
       else if(e.estado===401){await salirFirebase();acceso();error.replaceChildren(aviso('nota','Vuelve a entrar para renovar tu sesión.'));}
       else if(e.datos?.verificarCorreo)confirmar();
       else throw e;
@@ -45,7 +47,8 @@ export async function render(cont,params){
       else{await entrarFirebase(correo.control.value.trim(),clave.control.value);await completar();}
     });}},crear?nombre.campo:null,correo.campo,clave.campo,button);
     const google=el('button',{type:'button',class:'boton boton--bloque acceso__google',onclick:e=>actuar(e.currentTarget,async()=>{await entrarGoogleFirebase();await completar();})},'Continuar con Google');
-    zona.replaceChildren(google,el('p',{class:'acceso__alternativa'},'o con tu correo y contraseña'),el('div',{class:'tabs'},el('button',{class:'chip','aria-pressed':String(!crear),onclick:()=>acceso(false)},'Entrar'),el('button',{class:'chip','aria-pressed':String(crear),onclick:()=>acceso(true)},'Crear cuenta')),form,
+    const recuerdo=el('input',{type:'checkbox',checked:recordarAcceso(),onchange:e=>actuar(e.currentTarget,()=>fijarRecuerdo(e.currentTarget.checked))});
+    zona.replaceChildren(el('label',{class:'casilla'},recuerdo,'Recordar el acceso en este dispositivo'),el('p',{class:'pista'},'Actívalo solo en tu dispositivo personal.'),google,el('p',{class:'acceso__alternativa'},'o con tu correo y contraseña'),el('div',{class:'tabs'},el('button',{class:'chip','aria-pressed':String(!crear),onclick:()=>acceso(false)},'Entrar'),el('button',{class:'chip','aria-pressed':String(crear),onclick:()=>acceso(true)},'Crear cuenta')),form,
       el('button',{class:'boton boton--fantasma',onclick:recuperar},'He olvidado mi contraseña'));
   }
   function confirmar(){
@@ -60,7 +63,12 @@ export async function render(cont,params){
     zona.replaceChildren(el('h2',{},'Tu grupo de tortillas'),el('form',{onsubmit:e=>{e.preventDefault();actuar(button,async()=>{
       const datos=await api.post('/api/acceso/perfil',{nombre:nombre.control.value.trim(),codigo:codigo.control.value.trim()});
       establecerSesion(datos);navegar('/',{reemplazar:true});
-    });}},nombre.campo,codigo.campo,el('p',{class:'campo__ayuda'},'Te lo pasa quien organiza el grupo. Si estás creando el primer grupo con la cuenta organizadora, déjalo vacío.'),button),cancelar());
+    });}},nombre.campo,codigo.campo,el('p',{class:'campo__ayuda'},'Te lo pasa quien organiza el grupo. Si estás creando el primer grupo con la cuenta organizadora, déjalo vacío.'),button),
+    el('button',{class:'boton boton--fantasma',onclick:e=>actuar(e.currentTarget,async()=>{establecerSesion(await api.get('/api/cuenta'));navegar('/cuenta');})},'Gestionar mis datos si ya tenía una cuenta'),cancelar());
+  }
+  function bajaPendiente(){
+    zona.replaceChildren(el('h2',{},'Terminar la eliminación'),el('p',{},'Tus datos de Tortillas ya están eliminados. Falta cerrar el acceso asociado. Si te pide confirmar tu identidad, entra de nuevo.'),
+      el('button',{class:'boton boton--peligro',onclick:e=>actuar(e.currentTarget,async()=>{await eliminarAccesoFirebase();acceso();error.replaceChildren(aviso('exito','Tu cuenta de Tortillas se ha eliminado.'));})},'Eliminar el acceso de Tortillas'),cancelar());
   }
   function recuperar(){
     const correo=input('recuperar-correo','Correo electrónico','email','email'),button=el('button',{type:'submit',class:'boton boton--bloque'},'Enviar recuperación');

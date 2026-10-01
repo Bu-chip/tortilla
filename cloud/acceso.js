@@ -1,4 +1,5 @@
 import { all, first, run, statement, sha256 } from './db.js';
+import { comprobarBaja } from './cuentas.js';
 import { gruposDe } from './lecturas.js';
 import { texto } from '../server/servicios/validar.js';
 import { ErrorHttp } from '../server/http.js';
@@ -11,12 +12,15 @@ export async function limitar(db, clave, maximo, ventanaSegundos) {
   if(row.n>maximo) throw new ErrorHttp(429,'Demasiados intentos seguidos. Espera un momento y vuelve a intentarlo.');
 }
 export async function personaDe(db, identidad) {
+  await comprobarBaja(db,identidad.id);
   const row=await first(db,'SELECT id,nombre,usuario FROM personas WHERE id=? AND es_demo=0',[identidad.id]);
   if(!row || !(await gruposDe(db,row.id)).length) throw new ErrorHttp(403,'Introduce tu invitación para entrar al grupo.',{necesitaPerfil:true});
   return {...row,esDemo:false};
 }
 export async function registrarPerfil(db, identidad, cuerpo, env) {
-  const existente=await first(db,'SELECT persona_id FROM membresias WHERE persona_id=?',[identidad.id]);
+  await comprobarBaja(db,identidad.id);
+  const existente=await first(db,"SELECT persona_id FROM membresias WHERE persona_id=? AND rol IN ('admin','miembro')",[identidad.id]);
+  if(!existente && await first(db,"SELECT 1 FROM membresias WHERE persona_id=? AND rol='bloqueado'",[identidad.id])) throw new ErrorHttp(403,'Tu acceso al grupo se ha retirado. Contacta con quien lo administra.',{accesoRetirado:true});
   // Una membresía existente nunca obtiene nuevos permisos por volver a registrarse.
   if(existente) return personaDe(db,identidad);
   const nombre=texto(cuerpo.nombre,'nombre',{min:2,max:40});
@@ -36,11 +40,11 @@ export async function registrarPerfil(db, identidad, cuerpo, env) {
   }else{
     const codigo=texto(cuerpo.codigo,'código de invitación',{min:20,max:100});
     const hash=await sha256(codigo);
-    const valido=`codigo_hash=? AND revocada_en IS NULL AND expira_en>?`;
+    const valido=`codigo_hash=? AND revocada_en IS NULL AND expira_en>? AND EXISTS(SELECT 1 FROM membresias a WHERE a.grupo_id=invitaciones.grupo_id AND a.rol='admin')`;
     await db.batch([
       personaInsert(`EXISTS(SELECT 1 FROM invitaciones WHERE ${valido})`,[hash,instante]),
       statement(db,`INSERT INTO membresias(persona_id,grupo_id,rol,creado_en)
-        SELECT ?,grupo_id,'miembro',? FROM invitaciones WHERE ${valido} ON CONFLICT DO NOTHING`,[identidad.id,instante,hash,instante]),
+        SELECT ?,grupo_id,'miembro',? FROM invitaciones WHERE ${valido} ON CONFLICT(persona_id,grupo_id) DO UPDATE SET rol='miembro' WHERE membresias.rol='salio'`,[identidad.id,instante,hash,instante]),
     ]);
   }
   try { return await personaDe(db,identidad); }
@@ -49,7 +53,7 @@ export async function registrarPerfil(db, identidad, cuerpo, env) {
 export async function administrar(db,persona,grupoId) {
   const grupo=await first(db,`SELECT g.id,g.nombre FROM grupos g JOIN membresias m ON m.grupo_id=g.id
     WHERE m.persona_id=? AND g.id=? AND m.rol='admin'`,[persona.id,grupoId]);
-  if(!grupo) throw new ErrorHttp(403,'Solo quien administra este grupo puede gestionar invitaciones.');
+  if(!grupo) throw new ErrorHttp(403,'Solo quien administra este grupo puede gestionar sus miembros e invitaciones.');
   return grupo;
 }
 export async function invitaciones(db,persona,grupoId) {

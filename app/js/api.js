@@ -13,8 +13,21 @@ export class ErrorApi extends Error {
 
 export class ErrorRed extends Error {}
 
+/** Incluye la lectura del cuerpo: recibir cabeceras no significa haber recibido los datos. */
+export async function recibir(url, opciones, plazo = 20000) {
+  const control = new AbortController();
+  const temporizador = setTimeout(() => control.abort(), plazo);
+  try {
+    const respuesta = await fetch(url, { ...opciones, signal: control.signal });
+    return { respuesta, texto: await respuesta.text() };
+  } catch {
+    throw new ErrorRed(control.signal.aborted
+      ? 'La petición está tardando demasiado. Comprueba la conexión y vuelve a intentarlo.'
+      : 'No hay conexión con el servidor.');
+  } finally { clearTimeout(temporizador); }
+}
+
 async function pedir(metodo, ruta, cuerpo) {
-  let respuesta;
   const version=estado.versionSesion;
   const uid=usuarioFirebase()?.uid;
   const comprobarCuenta=()=>{
@@ -28,8 +41,7 @@ async function pedir(metodo, ruta, cuerpo) {
     throw new ErrorApi(401,{error:'Tu sesión ha caducado. Vuelve a entrar.'});
   }
   comprobarCuenta();
-  try {
-    respuesta = await fetch(`${API_BASE}${ruta}`, {
+  const { respuesta, texto } = await recibir(`${API_BASE}${ruta}`, {
       method: metodo,
       credentials: 'same-origin',
       headers: {
@@ -39,10 +51,6 @@ async function pedir(metodo, ruta, cuerpo) {
       },
       body: cuerpo !== undefined ? JSON.stringify(cuerpo) : undefined,
     });
-  } catch {
-    throw new ErrorRed('No hay conexión con el servidor.');
-  }
-  const texto = await respuesta.text();
   comprobarCuenta();
   let datos = null;
   try {
@@ -51,7 +59,7 @@ async function pedir(metodo, ruta, cuerpo) {
     datos = null;
   }
   if (!respuesta.ok) {
-    if (respuesta.status === 401 && !ruta.startsWith('/api/acceso/')) {
+    if (respuesta.status === 401 && !ruta.startsWith('/api/acceso/') && !datos?.reautenticar) {
       document.dispatchEvent(new CustomEvent('tortillas:sin-sesion'));
     }
     throw new ErrorApi(respuesta.status, datos);

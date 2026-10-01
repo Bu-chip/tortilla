@@ -112,7 +112,7 @@ export function retirarDegustacion(db, persona, id) {
 }
 
 export function resumenPersona(db, personaId) {
-  const fila = db.prepare(`SELECT COUNT(*) AS visitas, COUNT(DISTINCT bar_id) AS bares FROM degustaciones WHERE autor_id = ? AND retirada_en IS NULL`).get(personaId);
+  const fila = db.prepare(`SELECT COUNT(*) AS visitas, COUNT(DISTINCT bar_id) AS bares, SUM(CASE WHEN version_nota=1 THEN 1 ELSE 0 END) AS historicas FROM degustaciones WHERE autor_id = ? AND retirada_en IS NULL`).get(personaId);
   return { visitas: fila.visitas, bares: fila.bares };
 }
 

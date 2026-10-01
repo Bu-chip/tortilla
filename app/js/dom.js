@@ -34,12 +34,16 @@ export function svg(marcado) {
   return plantilla.content.firstElementChild;
 }
 
-export function debounce(fn, ms = 250) {
+export function debounce(fn, ms = 250, signal) {
   let t;
-  return (...args) => {
+  const cancelar = () => clearTimeout(t);
+  signal?.addEventListener('abort', cancelar, { once: true });
+  const ejecutar = (...args) => {
     clearTimeout(t);
-    t = setTimeout(() => fn(...args), ms);
+    if (!signal?.aborted) t = setTimeout(() => { if (!signal?.aborted) fn(...args); }, ms);
   };
+  ejecutar.cancelar = cancelar;
+  return ejecutar;
 }
 
 /** Sustituye el contenido de un nodo aceptando listas anidadas y valores nulos. */

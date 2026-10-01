@@ -1,12 +1,13 @@
 import { el } from '../dom.js';
 import { api, mensajeDeError } from '../api.js';
-import { navegar, ruta as construirRuta } from '../router.js';
+import { navegar, volverALista, ruta as construirRuta } from '../router.js';
 import { tarjetaMedias, tarjetaVisita, estadoVacio, aviso, cargando, confirmar, toast, formatearNota, formatearFecha, textoAmbito } from '../ui.js';
+import { estado } from '../estado.js';
 import { plural } from '../formato.js';
 import { TEXTOS } from '../etiquetas.js';
 import { fuenteLugares } from '../componentes/fuente-lugares.js';
 
-export async function render(cont, params, { id }) {
+export async function render(cont, params, { id, signal }) {
   const filtro = { metodo: params.get('metodo') === 'historica' ? 'historica' : 'general', variedad: params.get('variedad') || null, desde: params.get('desde') || null, hasta: params.get('hasta') || null };
   const cabecera = el('div', {});
   const cuerpo = el('div', { 'aria-live': 'polite' });
@@ -14,6 +15,7 @@ export async function render(cont, params, { id }) {
 
   let revision = 0;
   async function cargar() {
+    if (signal?.aborted) return;
     const turno = ++revision;
     cuerpo.replaceChildren(cargando('Calculando medias…'));
     const consulta = new URLSearchParams({ metodo: filtro.metodo });
@@ -25,13 +27,13 @@ export async function render(cont, params, { id }) {
     try {
       datos = await api.get(`/api/bares/${encodeURIComponent(id)}${consulta.toString() ? `?${consulta}` : ''}`);
     } catch (error) {
-      if (turno !== revision) return;
+      if (signal?.aborted || turno !== revision) return;
       cuerpo.replaceChildren(error.estado === 404
         ? estadoVacio({ titulo: 'Ese bar no existe', texto: 'Puede que se haya escrito mal el enlace.', accion: el('a', { class: 'boton boton--pequeno', href: '#/bares' }, 'Ver todos los bares') })
         : aviso('error', mensajeDeError(error), { acciones: el('button', { type: 'button', class: 'boton boton--pequeno', onclick: cargar }, 'Reintentar') }));
       return;
     }
-    if (turno === revision) pintar(datos);
+    if (!signal?.aborted && turno === revision) pintar(datos);
   }
 
   function pintar(datos) {
@@ -40,7 +42,7 @@ export async function render(cont, params, { id }) {
     const tieneVisitasPropias = visitas.some((v) => v.esMia);
 
     cabecera.replaceChildren(
-      el('p', { style: { marginBottom: '.4rem' } }, el('a', { href: '#/bares' }, '← Bares y ranking')),
+      el('p', { style: { marginBottom: '.4rem' } }, el('a', { href: volverALista().href }, `← ${volverALista().texto}`)),
       el('div', { class: 'ficha__cabecera' },
         el('div', { style: { flex: '1 1 60%' } },
           el('h1', {}, bar.nombre, bar.esDemo ? el('span', { class: 'etiqueta-demo', style: { marginLeft: '.5rem', verticalAlign: 'middle' } }, 'demo') : null),
@@ -51,7 +53,7 @@ export async function render(cont, params, { id }) {
           el('div', { style: { marginTop: '.3rem' } }, textoAmbito(ambito)), bar.fuente ? el('p', { class: 'atribucion' }, fuenteLugares(bar.fuente)) : null),
         el('div', { class: 'fila-botones' },
           el('a', { class: 'boton', href: `#/valorar?bar=${encodeURIComponent(bar.id)}` }, tieneVisitasPropias ? 'Volver a puntuar' : 'Puntuar aquí'),
-          el('button', { type: 'button', class: 'boton boton--pequeno boton--fantasma', onclick: () => editarBar(bar) }, '✏️ Editar bar'))));
+          (datos.puedeEditarBar ?? (estado.config.auth !== 'firebase')) ? el('button', { type: 'button', class: 'boton boton--pequeno boton--fantasma', onclick: () => editarBar(bar) }, 'Editar bar') : null)));
 
     const filtroActivo = datos.filtro.activo;
     const variedadFiltrada = filtro.variedad ? variedades.find((v) => v.id === filtro.variedad) : null;

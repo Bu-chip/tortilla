@@ -1,3 +1,4 @@
+import { recordarRuta, ruta as construirRuta } from '../router.js';
 import { el, debounce } from '../dom.js';
 import { api, mensajeDeError } from '../api.js';
 import { encabezado, mediasCompactas, estadoVacio, aviso, cargando, formatearNota } from '../ui.js';
@@ -26,9 +27,9 @@ function cargarLeaflet() {
 
 const ICONO_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="36" height="36"><ellipse cx="32" cy="58" rx="14" ry="4" fill="rgba(92,58,30,.25)"/><ellipse cx="32" cy="31" rx="29" ry="27" fill="#E8A800"/><ellipse cx="32" cy="30" rx="27" ry="25" fill="#F9C846"/><ellipse cx="32" cy="29" rx="21" ry="20" fill="#FDD86A"/><circle cx="25" cy="27" r="4" fill="#5C3A1E"/><circle cx="39" cy="27" r="4" fill="#5C3A1E"/><path d="M23 36q9 8 18 0" stroke="#5C3A1E" stroke-width="3" fill="none" stroke-linecap="round"/></svg>';
 
-export async function render(cont, params) {
+export async function render(cont, params, { signal } = {}) {
   const barDestacado = params.get('bar');
-  const entrada = el('input', { type: 'search', id: 'mapa-q', class: 'entrada', placeholder: 'Zona, barrio o nombre del bar', autocomplete: 'off' });
+  const entrada = el('input', { type: 'search', id: 'mapa-q', class: 'entrada', placeholder: 'Zona, barrio o nombre del bar', value: params.get('q') || '', autocomplete: 'off' });
   const contenedorMapa = el('div', { class: 'mapa', role: 'region', 'aria-label': 'Mapa de bares' }, el('div', { class: 'mapa__aviso' }, 'Cargando el mapa…'));
   const lista = el('div', { class: 'lista', 'aria-live': 'polite' });
   const botonCerca = el('button', { type: 'button', class: 'boton boton--pequeno boton--fantasma' }, '📍 Cerca de mí');
@@ -106,8 +107,8 @@ export async function render(cont, params) {
     return nodo;
   }
 
-  pintarLista();
-  entrada.addEventListener('input', debounce(() => pintarLista(entrada.value), 200));
+  pintarLista(entrada.value);
+  entrada.addEventListener('input', debounce(() => { recordarRuta('/mapa', { q: entrada.value }); pintarLista(entrada.value); }, 200, signal));
 
   botonCerca.addEventListener('click', () => {
     if (!navigator.geolocation) { avisoGeo.replaceChildren(aviso('info', 'Este navegador no ofrece ubicación. Puedes buscar por zona.')); return; }
@@ -132,7 +133,7 @@ export async function render(cont, params) {
         contenedorMapa.replaceChildren(el('div', { class: 'mapa__aviso' }, `${error.message} Usa la lista de abajo para abrir las fichas.`));
         return;
       }
-      if (descartado) return;
+      if (descartado || signal?.aborted) return;
       contenedorMapa.replaceChildren();
       const conUbicacion = bares.filter((b) => b.lat !== null && b.lng !== null);
       if (!conUbicacion.length) { contenedorMapa.replaceChildren(el('div', { class: 'mapa__aviso' }, 'Estos lugares todavía no tienen una ubicación confirmada. Puedes abrir sus fichas en la lista.')); return; }
