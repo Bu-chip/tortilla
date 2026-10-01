@@ -1,0 +1,25 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "tortillas-piloto",
+  "main": "worker.js",
+  "compatibility_date": "2026-09-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "observability": { "enabled": false },
+  "d1_databases": [{
+    "binding": "DB",
+    "database_name": "tortillas-piloto",
+    "database_id": "SUSTITUIR_POR_ID_DE_BASE_NUEVA",
+    "migrations_dir": "migraciones"
+  }],
+  "vars": {
+    "APP_NAME": "Tortillas",
+    "GROUP_NAME": "Amigos",
+    "FRONTEND_ORIGIN": "https://bu-chip.github.io",
+    "FIREBASE_PROJECT_ID": "SUSTITUIR",
+    "FIREBASE_API_KEY": "SUSTITUIR_CONFIGURACION_PUBLICA",
+    "FIREBASE_AUTH_DOMAIN": "SUSTITUIR.firebaseapp.com",
+    "PLACES_PROVIDER": "photon"
+  },
+  "triggers": { "crons": ["17 3 * * *"] }
+}

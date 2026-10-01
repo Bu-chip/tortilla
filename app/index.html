@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>{{APP_NAME}}</title>
+<meta name="description" content="Puntúa tortillas con tus amigos, repite bar y compara tu media con la de los demás.">
+<meta name="theme-color" content="#F9C846">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/app.css">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+</head>
+<body>
+<a class="saltar" href="#contenido">Ir al contenido</a>
+
+<header class="cabecera" id="cabecera">
+  <a class="logo" href="#/" aria-label="{{APP_NAME}}, ir al inicio">
+    <span class="logo__icono" id="logo-icono" aria-hidden="true"></span>
+    <span class="logo__texto">{{APP_NAME}}</span>
+  </a>
+  <nav class="nav-escritorio" id="nav-escritorio" aria-label="Secciones principales"></nav>
+  <div class="cabecera__derecha">
+    <a class="boton boton--pequeno cabecera__puntuar" href="#/valorar">⭐ Puntuar</a>
+    <button class="persona-chip" id="persona-chip" type="button" hidden aria-haspopup="dialog" aria-controls="cajon"></button>
+    <button class="hamburguesa" id="hamburguesa" type="button" aria-label="Abrir el menú" aria-expanded="false" aria-controls="cajon">
+      <span></span><span></span><span></span>
+    </button>
+  </div>
+</header>
+
+<div class="cajon-fondo" id="cajon-fondo" hidden></div>
+<aside class="cajon" id="cajon" role="dialog" aria-modal="true" aria-labelledby="cajon-titulo" hidden>
+  <div class="cajon__cabecera">
+    <div class="cajon__titulo" id="cajon-titulo">Menú 🍳</div>
+    <button class="cajon__cerrar" id="cajon-cerrar" type="button" aria-label="Cerrar el menú">✕</button>
+  </div>
+  <div class="cajon__persona" id="cajon-persona"></div>
+  <nav class="cajon__lista" id="cajon-lista" aria-label="Todas las secciones"></nav>
+</aside>
+
+<main class="contenido" id="contenido" tabindex="-1"></main>
+
+<nav class="barra-inferior" id="barra-inferior" aria-label="Navegación principal"></nav>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script type="module" src="/js/main.js"></script>
+</body>
+</html>

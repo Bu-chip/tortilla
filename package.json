@@ -1,0 +1,31 @@
+{
+  "name": "tortillas",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Aplicación para puntuar tortillas con amigos: visitas repetidas, «Tu media» y «Los demás».",
+  "type": "module",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning --env-file-if-exists=.env server/index.js",
+    "dev": "node --disable-warning=ExperimentalWarning --env-file-if-exists=.env --watch-path=server server/index.js",
+    "demo": "DEMO_MODE=1 node --disable-warning=ExperimentalWarning --env-file-if-exists=.env server/index.js --semilla-demo",
+    "semilla:demo": "DEMO_MODE=1 node --disable-warning=ExperimentalWarning --env-file-if-exists=.env server/semilla-demo.js",
+    "test": "node --disable-warning=ExperimentalWarning --test server/pruebas/*.test.js",
+    "exportar": "node --disable-warning=ExperimentalWarning --env-file-if-exists=.env server/herramientas/exportar.js",
+    "importar": "node --disable-warning=ExperimentalWarning --env-file-if-exists=.env server/herramientas/importar.js",
+    "copia": "node --disable-warning=ExperimentalWarning --env-file-if-exists=.env server/herramientas/copia.js",
+    "test:cloud": "node --test cloud/pruebas/*.test.js",
+    "preparar:web": "node server/herramientas/preparar-web.js",
+    "cloud:preparar": "node server/herramientas/preparar-worker.js",
+    "cloud:comprobar": "cd cloud && wrangler deploy --dry-run --config wrangler.example.jsonc --outdir ../dist/worker"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20260930.2",
+    "esbuild": "0.28.1",
+    "miniflare": "5.20260930.0-alpha",
+    "typescript": "7.0.2",
+    "wrangler": "^4.145.0"
+  }
+}

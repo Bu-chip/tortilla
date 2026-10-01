@@ -1,0 +1,3 @@
+# Copiar a cloud/.dev.vars solo para pruebas locales. No subir a GitHub.
+# En Cloudflare, configurar PILOT_OWNER_EMAIL como variable secreta del Worker.
+PILOT_OWNER_EMAIL=tu-correo-de-acceso@example.invalid

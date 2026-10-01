@@ -1,0 +1,17 @@
+node_modules/
+data/
+.env
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+.DS_Store
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+.wrangler/
+cloud/wrangler.jsonc
+dist/
+referencias/
+*.tgz
+*.log
+test-results/
